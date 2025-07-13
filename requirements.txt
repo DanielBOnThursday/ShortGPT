@@ -17,3 +17,5 @@ moviepy==2.1.2
 progress
 questionary
 edge-tts
+boto3
+botocore

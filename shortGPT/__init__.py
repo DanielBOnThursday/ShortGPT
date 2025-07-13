@@ -1,30 +1,22 @@
-# import time
-# t1 = time.time()
-# from . import config
-# print("Took", time.time() - t1, "seconds to import config")
-# t1 = time.time()
-# from . import editing
-# print("Took", time.time() - t1, "seconds to import editing")
-# t1 = time.time()
-# from . import audio
-# print("Took", time.time() - t1, "seconds to import audio")
-# t1 = time.time()
-# from . import engine
-# print("Took", time.time() - t1, "seconds to import engine")
-# t1 = time.time()
-# from . import database
-# print("Took", time.time() - t1, "seconds to import database")
-# t1 = time.time()
-# from . import gpt
-# print("Took", time.time() - t1, "seconds to import gpt")
-# t1 = time.time()
-# from . import tracking
-# print("Took", time.time() - t1, "seconds to import tracking")
+"""
+ShortGPT - Automated Short Video Creation Framework
+Now with integrated S3 upload and content organization
+"""
 
-# from . import config
-# from . import database
-# from . import editing_functions
-# from . import audio
-# from . import engine
-# from . import gpt
-# from . import tracking
+from . import config
+from . import database
+from . import audio
+from . import engine
+from . import gpt
+from . import tracking
+from . import upload
+
+# Import the new integrated engine for easy access
+from .engine.integrated_content_engine import IntegratedContentEngine
+from .upload.s3_uploader import S3Uploader
+from .upload.content_organizer import ContentOrganizer
+
+__all__ = [
+    'config', 'database', 'audio', 'engine', 'gpt', 'tracking', 'upload',
+    'IntegratedContentEngine', 'S3Uploader', 'ContentOrganizer'
+]

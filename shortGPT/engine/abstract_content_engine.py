@@ -34,7 +34,7 @@ class AbstractContentEngine(ABC):
                 setattr(self, cache_attr, self.dataManager.get(db_path))
             return getattr(self, cache_attr)
         else:
-            return super().__getattr__(name)
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
         if name.startswith('_db_'):

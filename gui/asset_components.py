@@ -40,12 +40,17 @@ class AssetComponentsUtils:
 
     @classmethod
     def start_file(cls, path):
-        if platform.system() == "Windows":
-            os.startfile(path)
-        elif platform.system() == "Darwin":
-            subprocess.Popen(["open", path])
-        else:
-            subprocess.Popen(["xdg-open", path])
+        try:
+            if platform.system() == "Windows":
+                os.startfile(path)
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except FileNotFoundError:
+            print(f"Cannot open file browser in container environment. Files are located at: {path}")
+        except Exception as e:
+            print(f"Error opening file: {e}. Files are located at: {path}")
 
     @classmethod
     def background_video_checkbox(cls):

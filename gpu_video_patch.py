@@ -55,23 +55,37 @@ def patch_ffmpeg_commands():
     if not torch.cuda.is_available():
         return False
     
-    original_popen = subprocess.Popen
-    
-    def gpu_ffmpeg_popen(cmd, *args, **kwargs):
-        if isinstance(cmd, list) and len(cmd) > 0:
-            # Check if this is an FFmpeg command
-            if 'ffmpeg' in cmd[0] or any('ffmpeg' in str(arg) for arg in cmd[:3]):
-                # Add GPU acceleration flags
-                gpu_cmd = add_gpu_flags_to_ffmpeg(cmd)
-                if gpu_cmd != cmd:
-                    print(f"🎮 GPU FFmpeg: Using hardware acceleration")
-                return original_popen(gpu_cmd, *args, **kwargs)
+    try:
+        # Store original Popen
+        if not hasattr(subprocess, '_original_popen'):
+            subprocess._original_popen = subprocess.Popen
         
-        return original_popen(cmd, *args, **kwargs)
-    
-    subprocess.Popen = gpu_ffmpeg_popen
-    print("✅ FFmpeg subprocess patched for GPU")
-    return True
+        # Create wrapper class instead of function
+        class GPUPopen:
+            def __init__(self, cmd, *args, **kwargs):
+                if isinstance(cmd, list) and len(cmd) > 0:
+                    # Check if this is an FFmpeg command
+                    if 'ffmpeg' in str(cmd[0]) or any('ffmpeg' in str(arg) for arg in cmd[:min(3, len(cmd))]):
+                        # Add GPU acceleration flags
+                        gpu_cmd = add_gpu_flags_to_ffmpeg(cmd)
+                        if gpu_cmd != cmd:
+                            print(f"🎮 GPU FFmpeg: Using hardware acceleration")
+                        cmd = gpu_cmd
+                
+                # Call original Popen
+                self._process = subprocess._original_popen(cmd, *args, **kwargs)
+                
+            def __getattr__(self, name):
+                return getattr(self._process, name)
+        
+        # Replace subprocess.Popen with our wrapper
+        subprocess.Popen = GPUPopen
+        print("✅ FFmpeg subprocess patched for GPU")
+        return True
+        
+    except Exception as e:
+        print(f"⚠️  Could not patch subprocess: {e}")
+        return False
 
 def add_gpu_flags_to_ffmpeg(cmd):
     """Add GPU acceleration flags to FFmpeg command"""

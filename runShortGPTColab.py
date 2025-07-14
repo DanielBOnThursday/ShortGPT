@@ -5,13 +5,28 @@ from dotenv import load_dotenv
 def apply_gpu_optimizations():
     """Apply GPU optimizations for video rendering"""
     try:
-        from gpu_video_patch import apply_all_gpu_patches
+        # Import GPU patch module
+        import gpu_video_patch
         print("🎮 Applying GPU optimizations...")
-        apply_all_gpu_patches()
+        
+        # Apply patches with error handling
+        try:
+            gpu_video_patch.apply_all_gpu_patches()
+        except Exception as patch_error:
+            print(f"⚠️  Some GPU optimizations could not be applied: {patch_error}")
+            print("🔧 Continuing with available optimizations...")
+            
+            # Try individual components that might still work
+            try:
+                gpu_video_patch.configure_environment_for_gpu()
+            except:
+                pass
+                
     except ImportError:
         print("⚠️  GPU optimization patch not found, using default configuration")
     except Exception as e:
-        print(f"⚠️  GPU optimization failed: {e}")
+        print(f"⚠️  GPU setup error: {e}")
+        print("🔧 Continuing without GPU optimizations...")
 
 def load_environment():
     """Load environment variables with proper error handling"""
@@ -80,8 +95,11 @@ def main():
     """Main application entry point"""
     print("🚀 Starting ShortGPT for Google Colab...")
     
-    # Apply GPU optimizations first
-    apply_gpu_optimizations()
+    # Apply GPU optimizations first (non-critical)
+    try:
+        apply_gpu_optimizations()
+    except Exception as e:
+        print(f"⚠️  GPU optimization skipped: {e}")
     
     # Load environment configuration
     load_environment()
@@ -101,6 +119,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"❌ Startup error: {e}")
+        import traceback
+        traceback.print_exc()
         print("🔧 Please check your configuration and try again")
         sys.exit(1)
 

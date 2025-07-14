@@ -19,6 +19,9 @@ videos/*
 flagged/
 .vscode
 .env
+.env.*
+client_secrets.json
+fix_env.py
 ShortGPT.egg-info
 dist
 build

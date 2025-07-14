@@ -53,6 +53,9 @@ class ShortAutomationUI(AbstractComponentUI):
 
                 AssetComponentsUtils.background_video_checkbox()
                 AssetComponentsUtils.background_music_checkbox()
+                # GPU Status Display
+                gpu_status = gr.HTML(self.get_gpu_status_html())
+                
                 createButton = gr.Button("Create Shorts")
                 
                 # S3 Upload controls
@@ -81,7 +84,11 @@ class ShortAutomationUI(AbstractComponentUI):
             ], outputs=[output, video_folder, generation_error, upload_to_s3_btn])
             
             # S3 Upload functionality
-            upload_to_s3_btn.click(self.upload_videos_to_s3, inputs=[short_type], outputs=[s3_upload_status])
+            upload_to_s3_btn.click(
+                self.upload_videos_to_s3, 
+                inputs=[short_type], 
+                outputs=[s3_upload_status]
+            ).success(lambda: gr.update(visible=True), outputs=[s3_upload_status])
         self.short_automation = short_automation
         return self.short_automation
 
@@ -135,7 +142,9 @@ class ShortAutomationUI(AbstractComponentUI):
                         show_s3_upload=True
                     )
                     self.embedHTML += video_html
-                except ImportError:
+                    print(f"✅ Enhanced video template loaded for {file_name}")
+                except ImportError as e:
+                    print(f"⚠️  S3 GUI utils import failed: {e}")
                     # Fallback to original template
                     self.embedHTML += f'''
                     <div style="display: flex; flex-direction: column; align-items: center;">
@@ -150,6 +159,19 @@ class ShortAutomationUI(AbstractComponentUI):
                             <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #28a745;"
                                     onclick="alert('S3 upload will be available soon!')">📤 Upload to S3</button>
                         </div>
+                    </div>'''
+                except Exception as e:
+                    print(f"❌ Error loading enhanced template: {e}")
+                    # Fallback to original template  
+                    self.embedHTML += f'''
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <video width="{250}" height="{500}" style="max-height: 100%;" controls>
+                            <source src="{file_url_path}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <a href="{file_url_path}" download="{file_name}" style="margin-top: 10px;">
+                            <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #007bff;">Download Video</button>
+                        </a>
                     </div>'''
                 yield self.embedHTML + '</div>', gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
         except Exception as e:
@@ -195,6 +217,66 @@ class ShortAutomationUI(AbstractComponentUI):
                 facts_subject = short_type
             return FactsShortEngine(voice_module, facts_type=facts_subject, background_video_name=background_video, background_music_name=background_music, num_images=numImages, watermark=watermark, language=language)
         raise gr.Error(f"Short type does not have a valid short engine: {short_type}")
+
+    def get_gpu_status_html(self):
+        """Get GPU status for display in UI"""
+        try:
+            import torch
+            import subprocess
+            
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                
+                # Check if NVENC is available
+                try:
+                    result = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], 
+                                          capture_output=True, text=True, timeout=5)
+                    nvenc_available = 'h264_nvenc' in result.stdout
+                except:
+                    nvenc_available = False
+                
+                if 'A100' in gpu_name:
+                    performance_mode = "🚀 A100 MAXIMUM PERFORMANCE"
+                elif 'V100' in gpu_name:
+                    performance_mode = "🔥 V100 HIGH PERFORMANCE"
+                elif 'T4' in gpu_name:
+                    performance_mode = "⚡ T4 EFFICIENT MODE"
+                else:
+                    performance_mode = "🎮 GPU ACCELERATED"
+                
+                nvenc_status = "✅ NVENC Available" if nvenc_available else "❌ NVENC Missing"
+                
+                return f'''
+                <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 12px; border-radius: 8px; margin: 10px 0;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.2em;">🎮</span>
+                        <div>
+                            <strong>{performance_mode}</strong><br>
+                            <small>GPU: {gpu_name} ({gpu_memory:.1f}GB) | {nvenc_status}</small>
+                        </div>
+                    </div>
+                </div>
+                '''
+            else:
+                return '''
+                <div style="background: #f8d7da; color: #721c24; padding: 12px; border-radius: 8px; margin: 10px 0;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.2em;">💻</span>
+                        <div>
+                            <strong>CPU MODE</strong><br>
+                            <small>No GPU detected - rendering will be slower</small>
+                        </div>
+                    </div>
+                </div>
+                '''
+        except Exception as e:
+            return f'''
+            <div style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; margin: 10px 0;">
+                <strong>⚠️ GPU Status Unknown</strong><br>
+                <small>Error checking GPU: {str(e)}</small>
+            </div>
+            '''
 
     def upload_videos_to_s3(self, short_type, progress=gr.Progress()):
         """Upload all generated videos to S3"""

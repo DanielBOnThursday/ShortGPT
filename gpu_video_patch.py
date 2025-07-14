@@ -61,32 +61,22 @@ def patch_ffmpeg_commands():
         if not hasattr(subprocess, '_original_popen'):
             subprocess._original_popen = subprocess.Popen
         
-        # Create wrapper class instead of function
-        class GPUPopen:
-            def __init__(self, cmd, *args, **kwargs):
-                if isinstance(cmd, list) and len(cmd) > 0:
-                    # Check if this is an FFmpeg command
-                    if 'ffmpeg' in str(cmd[0]) or any('ffmpeg' in str(arg) for arg in cmd[:min(3, len(cmd))]):
-                        # Add GPU acceleration flags
-                        gpu_cmd = add_gpu_flags_to_ffmpeg(cmd)
-                        if gpu_cmd != cmd:
-                            print(f"🎮 GPU FFmpeg: Using hardware acceleration")
-                        cmd = gpu_cmd
-                
-                # Call original Popen
-                self._process = subprocess._original_popen(cmd, *args, **kwargs)
-                
-            def __getattr__(self, name):
-                return getattr(self._process, name)
+        # Create wrapper function instead of class to avoid recursion
+        def gpu_popen_wrapper(cmd, *args, **kwargs):
+            if isinstance(cmd, list) and len(cmd) > 0:
+                # Check if this is an FFmpeg command
+                if 'ffmpeg' in str(cmd[0]) or any('ffmpeg' in str(arg) for arg in cmd[:min(3, len(cmd))]):
+                    # Add GPU acceleration flags
+                    gpu_cmd = add_gpu_flags_to_ffmpeg(cmd)
+                    if gpu_cmd != cmd:
+                        print(f"🎮 GPU FFmpeg: Using hardware acceleration")
+                    cmd = gpu_cmd
             
-            def __enter__(self):
-                return self._process.__enter__()
-            
-            def __exit__(self, exc_type, exc_val, exc_tb):
-                return self._process.__exit__(exc_type, exc_val, exc_tb)
+            # Call original Popen directly (not through subprocess.Popen)
+            return subprocess._original_popen(cmd, *args, **kwargs)
         
         # Replace subprocess.Popen with our wrapper
-        subprocess.Popen = GPUPopen
+        subprocess.Popen = gpu_popen_wrapper
         print("✅ FFmpeg subprocess patched for GPU")
         return True
         

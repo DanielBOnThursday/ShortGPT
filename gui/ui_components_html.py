@@ -29,28 +29,42 @@ class GradioComponentsHTML:
         '''
 
     @staticmethod
-    def get_html_video_template(file_url_path, file_name, width="auto", height="auto"):
+    def get_html_video_template(file_url_path, file_name, width="auto", height="auto", show_s3_upload=True):
         """
-        Generate an HTML code snippet for embedding and downloading a video.
+        Generate an HTML code snippet for embedding and downloading a video with S3 upload.
 
         Parameters:
         file_url_path (str): The URL or path to the video file.
         file_name (str): The name of the video file.
         width (str, optional): The width of the video. Defaults to "auto".
         height (str, optional): The height of the video. Defaults to "auto".
+        show_s3_upload (bool, optional): Whether to show S3 upload button. Defaults to True.
 
         Returns:
         str: The generated HTML code snippet.
         """
-        html = f'''
-            <div style="display: flex; flex-direction: column; align-items: center;">
-                <video width="{width}" height="{height}" style="max-height: 100%;" controls>
-                    <source src="{file_url_path}" type="video/mp4">
-                    Your browser does not support the video tag.
-                </video>
-                <a href="{file_url_path}" download="{file_name}" style="margin-top: 10px;">
-                    <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #007bff;">Download Video</button>
-                </a>
-            </div>
-        '''
-        return html
+        # Try to use enhanced template with S3 upload
+        try:
+            from gui.s3_gui_utils import get_enhanced_video_template
+            return get_enhanced_video_template(
+                file_url_path=file_url_path,
+                file_name=file_name,
+                video_path=file_url_path,
+                width=width,
+                height=height,
+                show_s3_upload=show_s3_upload
+            )
+        except ImportError:
+            # Fallback to original template
+            html = f'''
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <video width="{width}" height="{height}" style="max-height: 100%;" controls>
+                        <source src="{file_url_path}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                    <a href="{file_url_path}" download="{file_name}" style="margin-top: 10px;">
+                        <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #007bff;">Download Video</button>
+                    </a>
+                </div>
+            '''
+            return html

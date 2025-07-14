@@ -72,7 +72,9 @@ class IntegratedContentEngine:
                 )
                 
                 # Generate the video
-                video_path = engine.makeShort()
+                for step in engine.makeContent():
+                    pass  # Let the engine complete all steps
+                video_path = engine.get_video_output_path()
                 
                 if video_path and os.path.exists(video_path):
                     self.session_stats['videos_created'] += 1
@@ -173,7 +175,9 @@ class IntegratedContentEngine:
                 )
                 
                 # Generate the video
-                video_path = engine.makeShort()
+                for step in engine.makeContent():
+                    pass  # Let the engine complete all steps
+                video_path = engine.get_video_output_path()
                 
                 if video_path and os.path.exists(video_path):
                     self.session_stats['videos_created'] += 1
@@ -274,7 +278,9 @@ class IntegratedContentEngine:
                 )
                 
                 # Generate the video
-                video_path = engine.makeShort()
+                for step in engine.makeContent():
+                    pass  # Let the engine complete all steps
+                video_path = engine.get_video_output_path()
                 
                 if video_path and os.path.exists(video_path):
                     self.session_stats['videos_created'] += 1

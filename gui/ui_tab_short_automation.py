@@ -22,6 +22,7 @@ class ShortAutomationUI(AbstractComponentUI):
         self.embedHTML = '<div style="display: flex; overflow-x: auto; gap: 20px;">'
         self.progress_counter = 0
         self.short_automation = None
+        self.generated_videos = []  # Track generated video paths for S3 upload
 
     def create_ui(self):
         with gr.Row(visible=False) as short_automation:
@@ -53,6 +54,11 @@ class ShortAutomationUI(AbstractComponentUI):
                 AssetComponentsUtils.background_video_checkbox()
                 AssetComponentsUtils.background_music_checkbox()
                 createButton = gr.Button("Create Shorts")
+                
+                # S3 Upload controls
+                with gr.Row():
+                    upload_to_s3_btn = gr.Button("📤 Upload Generated Videos to S3", visible=False, variant="secondary")
+                    s3_upload_status = gr.HTML(visible=False)
 
                 generation_error = gr.HTML(visible=False)
                 video_folder = gr.Button("📁", visible=True)
@@ -72,7 +78,10 @@ class ShortAutomationUI(AbstractComponentUI):
                 AssetComponentsUtils.background_music_checkbox(),
                 facts_subject,
                 voice_eleven,
-            ], outputs=[output, video_folder, generation_error])
+            ], outputs=[output, video_folder, generation_error, upload_to_s3_btn])
+            
+            # S3 Upload functionality
+            upload_to_s3_btn.click(self.upload_videos_to_s3, inputs=[short_type], outputs=[s3_upload_status])
         self.short_automation = short_automation
         return self.short_automation
 
@@ -80,6 +89,8 @@ class ShortAutomationUI(AbstractComponentUI):
         '''Creates a short'''
 
         try:
+            # Reset generated videos list for new session
+            self.generated_videos = []
             numShorts = int(numShorts)
             numImages = int(numImages) if numImages else None
             background_videos = (background_video_list * ((numShorts // len(background_video_list)) + 1))[:numShorts]
@@ -105,26 +116,48 @@ class ShortAutomationUI(AbstractComponentUI):
                     self.progress_counter += 1
 
                 video_path = shortEngine.get_video_output_path()
+                # Track generated video for S3 upload
+                self.generated_videos.append({"path": video_path, "type": short_type})
+                
                 current_url = self.shortGptUI.share_url+"/" if self.shortGptUI.share else self.shortGptUI.local_url
                 file_url_path = f"{current_url}gradio_api/file={video_path}"
                 file_name = video_path.split("/")[-1].split("\\")[-1]
-                self.embedHTML += f'''
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <video width="{250}" height="{500}" style="max-height: 100%;" controls>
-                        <source src="{file_url_path}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                    <a href="{file_url_path}" download="{file_name}" style="margin-top: 10px;">
-                        <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #007bff;">Download Video</button>
-                    </a>
-                </div>'''
-                yield self.embedHTML + '</div>', gr.update(visible=True), gr.update(visible=False)
+                
+                # Use enhanced video template with S3 upload
+                try:
+                    from gui.s3_gui_utils import get_enhanced_video_template
+                    video_html = get_enhanced_video_template(
+                        file_url_path=file_url_path,
+                        file_name=file_name,
+                        video_path=video_path,  # Local path for S3 upload
+                        width="250",
+                        height="500",
+                        show_s3_upload=True
+                    )
+                    self.embedHTML += video_html
+                except ImportError:
+                    # Fallback to original template
+                    self.embedHTML += f'''
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <video width="{250}" height="{500}" style="max-height: 100%;" controls>
+                            <source src="{file_url_path}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                            <a href="{file_url_path}" download="{file_name}">
+                                <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #007bff;">💾 Download Video</button>
+                            </a>
+                            <button style="font-size: 1em; padding: 10px; border: none; cursor: pointer; color: white; background: #28a745;"
+                                    onclick="alert('S3 upload will be available soon!')">📤 Upload to S3</button>
+                        </div>
+                    </div>'''
+                yield self.embedHTML + '</div>', gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
         except Exception as e:
             traceback_str = ''.join(traceback.format_tb(e.__traceback__))
             error_name = type(e).__name__.capitalize() + " : " + f"{e.args[0]}"
             print("Error", traceback_str)
             error_html = GradioComponentsHTML.get_html_error_template().format(error_message=error_name, stack_trace=traceback_str)
-            yield self.embedHTML + '</div>', gr.update(visible=True), gr.update(value=error_html, visible=True)
+            yield self.embedHTML + '</div>', gr.update(visible=True), gr.update(value=error_html, visible=True), gr.update(visible=False)
     def inspect_create_inputs(self, background_video_list, background_music_list, watermark, short_type, facts_subject, progress=gr.Progress()):
         if short_type == "Custom Facts shorts":
             if not facts_subject:
@@ -162,3 +195,58 @@ class ShortAutomationUI(AbstractComponentUI):
                 facts_subject = short_type
             return FactsShortEngine(voice_module, facts_type=facts_subject, background_video_name=background_video, background_music_name=background_music, num_images=numImages, watermark=watermark, language=language)
         raise gr.Error(f"Short type does not have a valid short engine: {short_type}")
+
+    def upload_videos_to_s3(self, short_type, progress=gr.Progress()):
+        """Upload all generated videos to S3"""
+        if not self.generated_videos:
+            return '<div style="color: red;">❌ No videos found to upload. Please generate videos first.</div>'
+        
+        try:
+            from gui.s3_gui_utils import upload_video_to_s3
+            
+            upload_results = []
+            total_videos = len(self.generated_videos)
+            
+            for i, video_info in enumerate(self.generated_videos):
+                video_path = video_info["path"]
+                video_type = video_info["type"]
+                
+                progress((i + 1) / total_videos, f"Uploading video {i+1}/{total_videos}...")
+                
+                # Map short type to content type
+                content_type_mapping = {
+                    "Reddit Story shorts": "reddit_story",
+                    "Historical Facts shorts": "historical_facts", 
+                    "Scientific Facts shorts": "scientific_facts",
+                    "Custom Facts shorts": "custom_facts"
+                }
+                content_type = content_type_mapping.get(video_type, "custom_content")
+                
+                success, message = upload_video_to_s3(video_path, content_type)
+                
+                video_name = os.path.basename(video_path)
+                if success:
+                    upload_results.append(f'<div style="color: green; margin: 5px 0;">✅ {video_name}: {message}</div>')
+                else:
+                    upload_results.append(f'<div style="color: red; margin: 5px 0;">❌ {video_name}: {message}</div>')
+            
+            # Create summary
+            successful_uploads = sum(1 for result in upload_results if "✅" in result)
+            total_uploads = len(upload_results)
+            
+            summary = f'''
+            <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                <h3 style="margin-top: 0;">📤 S3 Upload Results</h3>
+                <p><strong>Success:</strong> {successful_uploads}/{total_uploads} videos uploaded</p>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    {"".join(upload_results)}
+                </div>
+            </div>
+            '''
+            
+            return summary
+            
+        except ImportError:
+            return '<div style="color: red;">❌ S3 upload functionality not available. Please check S3 configuration.</div>'
+        except Exception as e:
+            return f'<div style="color: red;">❌ Upload failed: {str(e)}</div>'

@@ -30,6 +30,16 @@ class AssetComponentsUtils:
     def getBackgroundMusicChoices(cls):
         df = AssetDatabase.get_df()
         choices = list(df.loc["background music" == df["type"]]["name"])[:20]
+        print(f"🎵 Background music choices found: {len(choices)} items")
+        if choices:
+            print(f"🎵 First few items: {choices[:3]}")
+        else:
+            print("⚠️  No background music found in database")
+            # Fallback to ensure at least one option
+            all_music = list(df.loc[df["type"].str.contains("music", case=False, na=False)]["name"])
+            if all_music:
+                print(f"🎵 Found {len(all_music)} music items with different type names")
+                choices = all_music[:20]
         return choices
 
     @classmethod
@@ -68,11 +78,20 @@ class AssetComponentsUtils:
     def background_music_checkbox(cls):
         if cls.instance_background_music_checkbox is None:
             choices = cls.getBackgroundMusicChoices()
+            
+            # Handle empty choices to prevent UI issues
+            if not choices:
+                print("⚠️  No background music found, creating empty component")
+                choices = ["No background music available"]
+                default_value = []
+            else:
+                default_value = [random.choice(choices)]
+            
             cls.instance_background_music_checkbox = gr.CheckboxGroup(
                 choices=choices,
                 interactive=True,
                 label="Choose background music",
-                value=random.choice(choices)
+                value=default_value
             )
         return cls.instance_background_music_checkbox
 

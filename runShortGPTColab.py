@@ -91,9 +91,29 @@ def load_environment():
     
     return env_loaded
 
+def install_yt_dlp():
+    """Ensure yt-dlp is properly installed"""
+    try:
+        import yt_dlp
+        print("✅ yt-dlp already available")
+        return True
+    except ImportError:
+        print("📦 Installing yt-dlp...")
+        try:
+            import subprocess
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "yt-dlp", "--upgrade"])
+            print("✅ yt-dlp installed successfully")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to install yt-dlp: {e}")
+            return False
+
 def main():
     """Main application entry point"""
     print("🚀 Starting ShortGPT for Google Colab...")
+    
+    # Install yt-dlp first
+    install_yt_dlp()
     
     # Apply GPU optimizations first (non-critical)
     try:

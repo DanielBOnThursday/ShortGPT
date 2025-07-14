@@ -32,29 +32,10 @@ def handle_path(path, extension = ".mp4"):
             try:
                 print(f"🌐 Processing URL: {path}")
                 
-                # Check if this is a YouTube URL
+                # For YouTube URLs, return the URL directly - it will be processed in handle_videos.py
                 if 'youtube.com' in path or 'youtu.be' in path:
-                    print("📺 YouTube URL detected, using yt-dlp for download...")
-                    import yt_dlp
-                    
-                    temp_file = tempfile.NamedTemporaryFile(suffix=extension, delete=False)
-                    temp_file.close()  # Close so yt-dlp can write to it
-                    
-                    ydl_opts = {
-                        'format': 'best[ext=mp4]/best',
-                        'outtmpl': temp_file.name,
-                        'quiet': True,
-                        'no_warnings': True,
-                    }
-                    
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([path])
-                    
-                    if not os.path.exists(temp_file.name):
-                        raise Exception(f"YouTube download failed: {temp_file.name}")
-                    
-                    print(f"✅ YouTube video downloaded: {temp_file.name}")
-                    return temp_file.name
+                    print("📺 YouTube URL detected, passing to video handler...")
+                    return path
                     
                 else:
                     # Non-YouTube URL, use FFmpeg

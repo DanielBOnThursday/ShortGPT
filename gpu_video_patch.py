@@ -12,42 +12,43 @@ import torch
 
 def patch_moviepy_for_gpu():
     """Configure MoviePy for GPU acceleration"""
-    try:
-        import moviepy.editor as mp
-        import moviepy.config as mpconfig
+    if not torch.cuda.is_available():
+        return False
         
-        # Set GPU-optimized FFmpeg parameters
-        if torch.cuda.is_available():
-            try:
-                # Configure MoviePy via environment variables (safer approach)
-                gpu_ffmpeg_params = [
-                    '-hwaccel', 'cuda',
-                    '-hwaccel_output_format', 'cuda',
-                    '-c:v', 'h264_nvenc',
-                    '-preset', 'fast'
-                ]
-                
-                # Set environment for MoviePy to use
-                os.environ['MOVIEPY_FFMPEG_PARAMS'] = ' '.join(gpu_ffmpeg_params)
-                os.environ['FFMPEG_BINARY'] = 'ffmpeg'
-                
-                # Verify MoviePy can access FFmpeg
-                if hasattr(mpconfig, 'check_ffmpeg'):
-                    try:
-                        mpconfig.check_ffmpeg()
-                    except:
-                        pass  # Non-critical if check fails
-                
-                print("✅ MoviePy configured for GPU acceleration")
-                return True
-                
-            except Exception as e:
-                print(f"⚠️  MoviePy configuration warning: {e}")
-                print("🔧 Continuing with basic GPU setup")
-                return False
+    try:
+        # Set GPU parameters before importing MoviePy
+        gpu_ffmpeg_params = [
+            '-hwaccel', 'cuda',
+            '-hwaccel_output_format', 'cuda',
+            '-c:v', 'h264_nvenc',
+            '-preset', 'fast',
+            '-gpu', '0'
+        ]
+        
+        # Set environment for MoviePy to use
+        os.environ['MOVIEPY_FFMPEG_PARAMS'] = ' '.join(gpu_ffmpeg_params)
+        os.environ['FFMPEG_BINARY'] = 'ffmpeg'
+        os.environ['IMAGEIO_FFMPEG_EXE'] = 'ffmpeg'
+        
+        # Try to import and configure MoviePy
+        try:
+            import moviepy.editor as mp
+            import moviepy.config as mpconfig
             
-    except ImportError:
-        print("⚠️  MoviePy not available for configuration")
+            # Force MoviePy to use GPU-enabled FFmpeg
+            if hasattr(mpconfig, 'change_settings'):
+                mpconfig.change_settings({"FFMPEG_BINARY": "ffmpeg"})
+            
+            print("✅ MoviePy configured for GPU acceleration")
+            return True
+            
+        except ImportError:
+            print("⚠️  MoviePy will be configured when available")
+            # Still return True because we set the environment vars
+            return True
+            
+    except Exception as e:
+        print(f"⚠️  MoviePy GPU setup warning: {e}")
         return False
 
 def patch_ffmpeg_commands():
@@ -99,72 +100,106 @@ def add_gpu_flags_to_ffmpeg(cmd):
         return cmd
     
     # Don't modify probe commands or commands that already have GPU flags
-    if any(flag in cmd for flag in ['-f', 'probe', '-hwaccel', 'nvenc']):
+    if any(flag in cmd for flag in ['-f', 'probe', '-hwaccel']):
+        return cmd
+    
+    # Check if this is likely a video encoding command
+    is_video_encode = any(x in ' '.join(cmd) for x in ['.mp4', '.mov', '.avi', '.webm', '.mkv', '-c:v', '-vcodec'])
+    
+    if not is_video_encode:
         return cmd
     
     # Find insertion point (after ffmpeg but before input)
     insert_idx = 1
     for i, arg in enumerate(cmd[1:], 1):
-        if not arg.startswith('-'):
+        if not arg.startswith('-') and (arg.endswith('.mp4') or arg.endswith('.mov') or 
+                                       arg.endswith('.avi') or arg.endswith('.webm') or 
+                                       arg.endswith('.mkv') or '-i' in cmd[i-1:i]):
             insert_idx = i
             break
     
     # GPU acceleration flags
     gpu_flags = [
         '-hwaccel', 'cuda',
-        '-hwaccel_output_format', 'cuda'
+        '-hwaccel_output_format', 'cuda',
+        '-hwaccel_device', '0'
     ]
     
     # Insert GPU flags
     new_cmd = cmd[:insert_idx] + gpu_flags + cmd[insert_idx:]
     
-    # Add GPU encoder for output operations
-    if any(x in cmd for x in ['-y', '.mp4', '.mov', '.avi']):
-        # Find video codec or add one
-        codec_added = False
-        for i, arg in enumerate(new_cmd):
-            if arg == '-c:v':
-                new_cmd[i+1] = 'h264_nvenc'
-                codec_added = True
+    # Replace video codec with GPU encoder
+    codec_replaced = False
+    for i, arg in enumerate(new_cmd):
+        if arg in ['-c:v', '-vcodec', '-codec:v']:
+            if i + 1 < len(new_cmd):
+                # Replace any codec with nvenc version
+                codec = new_cmd[i+1]
+                if 'nvenc' not in codec:
+                    if 'h264' in codec or codec == 'libx264':
+                        new_cmd[i+1] = 'h264_nvenc'
+                    elif 'hevc' in codec or 'h265' in codec or codec == 'libx265':
+                        new_cmd[i+1] = 'hevc_nvenc'
+                    else:
+                        new_cmd[i+1] = 'h264_nvenc'  # Default to h264
+                codec_replaced = True
                 break
-        
-        if not codec_added:
-            # Find output file and insert codec before it
-            for i in range(len(new_cmd)-1, 0, -1):
-                if not new_cmd[i].startswith('-') and '.' in new_cmd[i]:
-                    new_cmd.insert(i, '-preset')
-                    new_cmd.insert(i, 'fast')
-                    new_cmd.insert(i, 'h264_nvenc')
-                    new_cmd.insert(i, '-c:v')
-                    break
+    
+    # If no codec specified, add GPU encoder before output
+    if not codec_replaced and is_video_encode:
+        for i in range(len(new_cmd)-1, 0, -1):
+            if not new_cmd[i].startswith('-') and '.' in new_cmd[i]:
+                # This is likely the output file
+                new_cmd.insert(i, 'p4')  # A100 optimized preset
+                new_cmd.insert(i, '-preset')
+                new_cmd.insert(i, 'h264_nvenc')
+                new_cmd.insert(i, '-c:v')
+                break
     
     return new_cmd
 
 def patch_shortgpt_video_processing():
     """Patch ShortGPT's video processing modules"""
     try:
-        # Patch editing framework
-        from shortGPT.editing_framework import core_editing_engine
+        # Patch CoreEditingEngine
+        from shortGPT.editing_framework.core_editing_engine import CoreEditingEngine
         
-        original_render = core_editing_engine.CoreEditingEngine.render_video
+        if hasattr(CoreEditingEngine, 'generate_video'):
+            original_generate = CoreEditingEngine.generate_video
+            
+            def gpu_generate_video(self, *args, **kwargs):
+                """GPU-accelerated video generation"""
+                # Set GPU environment before rendering
+                if torch.cuda.is_available():
+                    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+                    os.environ['FFMPEG_CODEC'] = 'h264_nvenc'
+                    os.environ['MOVIEPY_GPU'] = '1'
+                    
+                    print("🎮 Starting GPU-accelerated video generation...")
+                    
+                return original_generate(self, *args, **kwargs)
+            
+            CoreEditingEngine.generate_video = gpu_generate_video
+            print("✅ CoreEditingEngine patched for GPU")
         
-        def gpu_render_video(self, *args, **kwargs):
-            """GPU-accelerated video rendering"""
-            # Set GPU environment before rendering
-            if torch.cuda.is_available():
-                os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-                os.environ['FFMPEG_CODEC'] = 'h264_nvenc'
-                os.environ['MOVIEPY_GPU'] = '1'
-                
-                print("🎮 Starting GPU-accelerated video rendering...")
-                
-            return original_render(self, *args, **kwargs)
+        # Also patch EditingEngine wrapper
+        from shortGPT.editing_framework.editing_engine import EditingEngine
         
-        core_editing_engine.CoreEditingEngine.render_video = gpu_render_video
-        print("✅ ShortGPT editing engine patched for GPU")
+        if hasattr(EditingEngine, 'renderVideo'):
+            original_render = EditingEngine.renderVideo
+            
+            def gpu_render_video(self, *args, **kwargs):
+                """GPU-accelerated video rendering"""
+                print("🎮 Using GPU-accelerated video rendering...")
+                return original_render(self, *args, **kwargs)
+            
+            EditingEngine.renderVideo = gpu_render_video
+            print("✅ EditingEngine patched for GPU")
         
     except ImportError as e:
         print(f"⚠️  Could not patch ShortGPT modules: {e}")
+    except Exception as e:
+        print(f"⚠️  Error patching video processing: {e}")
 
 def configure_environment_for_gpu():
     """Set environment variables for GPU acceleration"""

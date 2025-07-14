@@ -82,21 +82,27 @@ class CoreEditingEngine:
         import os
         import torch
         
-        # Determine the best codec to use
+        # Try GPU encoding first if available
         if torch.cuda.is_available() and os.getenv('FFMPEG_GPU', '0') == '1':
-            video_codec = 'h264_nvenc'
-            preset = 'fast'  # GPU preset
-            print("🎮 Using GPU encoding: h264_nvenc")
-        else:
-            video_codec = 'libx264'
-            preset = 'veryfast'  # CPU preset
-            print("💻 Using CPU encoding: libx264")
+            try:
+                print("🎮 Using GPU encoding: h264_nvenc")
+                if logger:
+                    my_logger = MoviepyProgressLogger(callBackFunction=logger)
+                    video.write_videofile(output_file, threads=threads, codec='h264_nvenc', audio_codec='aac', fps=25, preset='fast', logger=my_logger)
+                else:
+                    video.write_videofile(output_file, threads=threads, codec='h264_nvenc', audio_codec='aac', fps=25, preset='fast')
+                return output_file  # Success with GPU
+            except Exception as e:
+                print(f"⚠️  GPU encoding failed: {e}")
+                print("🔄 Falling back to CPU encoding...")
         
+        # CPU encoding (fallback or default)
+        print("💻 Using CPU encoding: libx264")
         if logger:
             my_logger = MoviepyProgressLogger(callBackFunction=logger)
-            video.write_videofile(output_file, threads=threads, codec=video_codec, audio_codec='aac', fps=25, preset=preset, logger=my_logger)
+            video.write_videofile(output_file, threads=threads, codec='libx264', audio_codec='aac', fps=25, preset='veryfast', logger=my_logger)
         else:
-            video.write_videofile(output_file, threads=threads, codec=video_codec, audio_codec='aac', fps=25, preset=preset)
+            video.write_videofile(output_file, threads=threads, codec='libx264', audio_codec='aac', fps=25, preset='veryfast')
         return output_file
     
     def generate_audio(self, schema:Dict[str, Any], output_file, logger=None) -> None:

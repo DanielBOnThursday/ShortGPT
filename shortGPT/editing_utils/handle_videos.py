@@ -43,22 +43,41 @@ def extract_random_clip_from_video(video_url, video_duration, clip_duration, out
     import os
     import torch
     
+    # Try GPU encoding first if available
     if torch.cuda.is_available() and os.getenv('FFMPEG_GPU', '0') == '1':
         video_codec = 'h264_nvenc'
         preset = 'fast'
-        print("🎮 Video clipping with GPU: h264_nvenc")
-    else:
-        video_codec = 'libx264'
-        preset = 'ultrafast'
+        
+        command = [
+            'ffmpeg',
+            '-loglevel', 'error',
+            '-ss', str(start_time),
+            '-t', str(clip_duration),
+            '-i', video_url,
+            '-c:v', video_codec,
+            '-preset', preset,
+            output_file
+        ]
+        
+        try:
+            print("🎮 Video clipping with GPU: h264_nvenc")
+            subprocess.run(command, check=True)
+            return  # Success with GPU
+        except subprocess.CalledProcessError as e:
+            print("⚠️  GPU encoding failed, falling back to CPU...")
+            print(f"GPU error: {e}")
+            # Fall through to CPU encoding
     
+    # CPU encoding (fallback or default)
+    print("💻 Video clipping with CPU: libx264")
     command = [
         'ffmpeg',
         '-loglevel', 'error',
         '-ss', str(start_time),
         '-t', str(clip_duration),
         '-i', video_url,
-        '-c:v', video_codec,
-        '-preset', preset,
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
         output_file
     ]
     

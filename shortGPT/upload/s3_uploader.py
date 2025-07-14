@@ -105,12 +105,29 @@ class S3Uploader:
             }
             
             if metadata:
+                print(f"🔍 Processing metadata for S3 upload: {type(metadata)} with {len(metadata)} items")
                 # Convert all metadata values to strings for S3 compatibility
                 for key, value in metadata.items():
-                    if value is not None:
-                        upload_metadata[str(key)] = str(value)
-                    else:
-                        upload_metadata[str(key)] = 'null'
+                    try:
+                        # Ensure key is a string
+                        str_key = str(key) if key is not None else 'unknown_key'
+                        
+                        # Convert value to string safely
+                        if value is not None:
+                            # Handle different types safely
+                            if isinstance(value, (int, float, bool)):
+                                str_value = str(value)
+                            elif isinstance(value, (list, dict)):
+                                str_value = json.dumps(value)
+                            else:
+                                str_value = str(value)
+                            upload_metadata[str_key] = str_value
+                        else:
+                            upload_metadata[str_key] = 'null'
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not convert metadata {key}:{value} to string: {e}")
+                        # Skip problematic metadata
+                        continue
             
             # Determine content type for HTTP headers
             content_mime_type, _ = mimetypes.guess_type(video_path)

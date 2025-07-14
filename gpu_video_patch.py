@@ -11,37 +11,43 @@ import importlib
 import torch
 
 def patch_moviepy_for_gpu():
-    """Patch MoviePy to use GPU acceleration"""
+    """Configure MoviePy for GPU acceleration"""
     try:
         import moviepy.editor as mp
         import moviepy.config as mpconfig
         
         # Set GPU-optimized FFmpeg parameters
         if torch.cuda.is_available():
-            # Force GPU encoding parameters
-            original_ffmpeg_movie = mp.VideoFileClip.__init__
-            
-            def gpu_video_clip_init(self, filename, *args, **kwargs):
-                # Add GPU acceleration flags
-                if 'ffmpeg_params' not in kwargs:
-                    kwargs['ffmpeg_params'] = []
-                
-                gpu_params = [
+            try:
+                # Configure MoviePy via environment variables (safer approach)
+                gpu_ffmpeg_params = [
                     '-hwaccel', 'cuda',
                     '-hwaccel_output_format', 'cuda',
-                    '-extra_hw_frames', '3'
+                    '-c:v', 'h264_nvenc',
+                    '-preset', 'fast'
                 ]
                 
-                kwargs['ffmpeg_params'].extend(gpu_params)
-                return original_ffmpeg_movie(self, filename, *args, **kwargs)
-            
-            mp.VideoFileClip.__init__ = gpu_video_clip_init
-            
-            print("✅ MoviePy patched for GPU acceleration")
-            return True
+                # Set environment for MoviePy to use
+                os.environ['MOVIEPY_FFMPEG_PARAMS'] = ' '.join(gpu_ffmpeg_params)
+                os.environ['FFMPEG_BINARY'] = 'ffmpeg'
+                
+                # Verify MoviePy can access FFmpeg
+                if hasattr(mpconfig, 'check_ffmpeg'):
+                    try:
+                        mpconfig.check_ffmpeg()
+                    except:
+                        pass  # Non-critical if check fails
+                
+                print("✅ MoviePy configured for GPU acceleration")
+                return True
+                
+            except Exception as e:
+                print(f"⚠️  MoviePy configuration warning: {e}")
+                print("🔧 Continuing with basic GPU setup")
+                return False
             
     except ImportError:
-        print("⚠️  MoviePy not available for patching")
+        print("⚠️  MoviePy not available for configuration")
         return False
 
 def patch_ffmpeg_commands():

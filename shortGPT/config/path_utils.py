@@ -29,10 +29,26 @@ def handle_path(path, extension = ".mp4"):
     
     if 'https' in path:
         if is_running_in_colab():
-            temp_file = tempfile.NamedTemporaryFile(suffix= extension, delete=False)
-            # The '-y' option overwrites the output file if it already exists.
-            command = ['ffmpeg', '-y', '-i', path, temp_file.name]
-            subprocess.run(command, check=True)
-            temp_file.close()
-            return temp_file.name
+            try:
+                print(f"🌐 Downloading and converting URL: {path}")
+                temp_file = tempfile.NamedTemporaryFile(suffix= extension, delete=False)
+                # The '-y' option overwrites the output file if it already exists.
+                command = ['ffmpeg', '-y', '-i', path, temp_file.name]
+                
+                result = subprocess.run(command, check=True, capture_output=True, text=True)
+                temp_file.close()
+                
+                if not os.path.exists(temp_file.name):
+                    raise Exception(f"Downloaded file not created: {temp_file.name}")
+                
+                print(f"✅ URL converted successfully: {temp_file.name}")
+                return temp_file.name
+                
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to download/convert URL: {path}")
+                print(f"FFmpeg error: {e.stderr}")
+                raise Exception(f"URL processing failed: {e}")
+            except Exception as e:
+                print(f"❌ Error processing URL {path}: {e}")
+                raise Exception(f"URL handling failed: {e}")
     return path

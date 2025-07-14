@@ -81,11 +81,22 @@ def extract_random_clip_from_video(video_url, video_duration, clip_duration, out
         output_file
     ]
     
-    subprocess.run(command, check=True)
-    
-    if not os.path.exists(output_file):
-        raise Exception("Random clip failed to be written")
-    return output_file
+    try:
+        subprocess.run(command, check=True)
+        
+        if not os.path.exists(output_file):
+            raise Exception(f"Random clip failed to be written to {output_file}")
+        
+        print(f"✅ Video clip created successfully: {output_file}")
+        return output_file
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg command failed: {e}")
+        print(f"Command: {' '.join(command)}")
+        raise Exception(f"Video clipping failed: {e}")
+    except Exception as e:
+        print(f"❌ Video clipping error: {e}")
+        raise Exception(f"Failed to extract video clip: {e}")
 
 
 def get_aspect_ratio(video_file):

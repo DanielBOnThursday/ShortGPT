@@ -2,6 +2,17 @@ import os
 import sys
 from dotenv import load_dotenv
 
+def apply_gpu_optimizations():
+    """Apply GPU optimizations for video rendering"""
+    try:
+        from gpu_video_patch import apply_all_gpu_patches
+        print("🎮 Applying GPU optimizations...")
+        apply_all_gpu_patches()
+    except ImportError:
+        print("⚠️  GPU optimization patch not found, using default configuration")
+    except Exception as e:
+        print(f"⚠️  GPU optimization failed: {e}")
+
 def load_environment():
     """Load environment variables with proper error handling"""
     print("🔧 Loading environment configuration...")
@@ -68,6 +79,9 @@ def load_environment():
 def main():
     """Main application entry point"""
     print("🚀 Starting ShortGPT for Google Colab...")
+    
+    # Apply GPU optimizations first
+    apply_gpu_optimizations()
     
     # Load environment configuration
     load_environment()

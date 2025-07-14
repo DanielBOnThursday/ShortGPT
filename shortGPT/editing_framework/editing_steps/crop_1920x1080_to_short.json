@@ -21,7 +21,8 @@
 				"param": {
 					"width": 1080,
 					"height": 1920,
-					"x_center": 540
+					"x_center": "auto",
+					"y_center": "auto"
 				}
 			}
 		]

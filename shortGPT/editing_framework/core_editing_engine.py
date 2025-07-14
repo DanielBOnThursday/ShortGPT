@@ -157,7 +157,32 @@ class CoreEditingEngine:
                 continue
 
             if action['type'] == 'crop':
-                clip = clip.with_effects([vfx.Crop(**action['param'])])
+                params = action['param'].copy()
+                
+                # Handle smart center cropping
+                if 'x_center' in params and params['x_center'] == 'auto':
+                    # Calculate center x to center the crop area in the clip
+                    center_x = clip.w // 2
+                    params['x_center'] = center_x
+                    # Remove the 'auto' string
+                    if params['x_center'] == 'auto':
+                        params.pop('x_center')
+                
+                if 'y_center' in params and params['y_center'] == 'auto':
+                    # Calculate center y to center the crop area in the clip  
+                    center_y = clip.h // 2
+                    params['y_center'] = center_y
+                    # Remove the 'auto' string
+                    if params['y_center'] == 'auto':
+                        params.pop('y_center')
+                
+                # Clean up any remaining 'auto' values
+                if params.get('x_center') == 'auto':
+                    params['x_center'] = clip.w // 2
+                if params.get('y_center') == 'auto':
+                    params['y_center'] = clip.h // 2
+                
+                clip = clip.with_effects([vfx.Crop(**params)])
                 continue
 
             if action['type'] == 'screen_position':

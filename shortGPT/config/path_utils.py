@@ -30,19 +30,46 @@ def handle_path(path, extension = ".mp4"):
     if 'https' in path:
         if is_running_in_colab():
             try:
-                print(f"🌐 Downloading and converting URL: {path}")
-                temp_file = tempfile.NamedTemporaryFile(suffix= extension, delete=False)
-                # The '-y' option overwrites the output file if it already exists.
-                command = ['ffmpeg', '-y', '-i', path, temp_file.name]
+                print(f"🌐 Processing URL: {path}")
                 
-                result = subprocess.run(command, check=True, capture_output=True, text=True)
-                temp_file.close()
-                
-                if not os.path.exists(temp_file.name):
-                    raise Exception(f"Downloaded file not created: {temp_file.name}")
-                
-                print(f"✅ URL converted successfully: {temp_file.name}")
-                return temp_file.name
+                # Check if this is a YouTube URL
+                if 'youtube.com' in path or 'youtu.be' in path:
+                    print("📺 YouTube URL detected, using yt-dlp for download...")
+                    import yt_dlp
+                    
+                    temp_file = tempfile.NamedTemporaryFile(suffix=extension, delete=False)
+                    temp_file.close()  # Close so yt-dlp can write to it
+                    
+                    ydl_opts = {
+                        'format': 'best[ext=mp4]/best',
+                        'outtmpl': temp_file.name,
+                        'quiet': True,
+                        'no_warnings': True,
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([path])
+                    
+                    if not os.path.exists(temp_file.name):
+                        raise Exception(f"YouTube download failed: {temp_file.name}")
+                    
+                    print(f"✅ YouTube video downloaded: {temp_file.name}")
+                    return temp_file.name
+                    
+                else:
+                    # Non-YouTube URL, use FFmpeg
+                    print("🌐 Non-YouTube URL, using FFmpeg...")
+                    temp_file = tempfile.NamedTemporaryFile(suffix=extension, delete=False)
+                    command = ['ffmpeg', '-y', '-i', path, temp_file.name]
+                    
+                    result = subprocess.run(command, check=True, capture_output=True, text=True)
+                    temp_file.close()
+                    
+                    if not os.path.exists(temp_file.name):
+                        raise Exception(f"Downloaded file not created: {temp_file.name}")
+                    
+                    print(f"✅ URL converted successfully: {temp_file.name}")
+                    return temp_file.name
                 
             except subprocess.CalledProcessError as e:
                 print(f"❌ Failed to download/convert URL: {path}")

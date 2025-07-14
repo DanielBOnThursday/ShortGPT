@@ -3,6 +3,7 @@ import random
 import yt_dlp
 import subprocess
 import json
+import torch
 
 def getYoutubeVideoLink(url):
     print(f"🔍 Extracting YouTube video info from: {url}")
@@ -116,8 +117,6 @@ def extract_random_clip_from_video(video_url, video_duration, clip_duration, out
     print(f"🎯 Random start time selected: {start_time:.2f}s")
     
     # Choose codec and preset based on GPU availability
-    import os
-    import torch
     
     # Try GPU encoding first if available
     if torch.cuda.is_available() and os.getenv('FFMPEG_GPU', '0') == '1':

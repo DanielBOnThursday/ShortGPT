@@ -120,8 +120,20 @@ class ContentShortEngine(AbstractContentEngine):
                 self._db_audio_path, isVideo=False)
         if not self._db_background_trimmed:
             self.logger("Rendering short: (2/4) preparing background video asset...")
-            self._db_background_trimmed = extract_random_clip_from_video(
-                self._db_background_video_url, self._db_background_video_duration, self._db_voiceover_duration, self.dynamicAssetDir + "clipped_background.mp4")
+            try:
+                self._db_background_trimmed = extract_random_clip_from_video(
+                    self._db_background_video_url, self._db_background_video_duration, self._db_voiceover_duration, self.dynamicAssetDir + "clipped_background.mp4")
+                
+                # Validate that we got a valid trimmed video path
+                if not self._db_background_trimmed:
+                    raise ValueError("extract_random_clip_from_video returned None")
+                if not os.path.exists(self._db_background_trimmed):
+                    raise ValueError(f"Trimmed background video not created at: {self._db_background_trimmed}")
+                
+                print(f"✅ Background video trimmed successfully: {self._db_background_trimmed}")
+                
+            except Exception as e:
+                raise ValueError(f"Failed to prepare background video: {e}")
 
     def _prepareCustomAssets(self):
         self.logger("Rendering short: (3/4) preparing custom assets...")

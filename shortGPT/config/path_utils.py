@@ -19,6 +19,14 @@ def is_running_in_colab():
     return 'COLAB_GPU' in os.environ
 
 def handle_path(path, extension = ".mp4"):
+    # Check for None or empty path
+    if path is None:
+        raise ValueError("Path cannot be None")
+    if not isinstance(path, str):
+        raise ValueError(f"Path must be a string, got {type(path)}")
+    if not path.strip():
+        raise ValueError("Path cannot be empty")
+    
     if 'https' in path:
         if is_running_in_colab():
             temp_file = tempfile.NamedTemporaryFile(suffix= extension, delete=False)

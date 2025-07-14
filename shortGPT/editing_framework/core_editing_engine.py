@@ -211,8 +211,18 @@ class CoreEditingEngine:
         return clip
     # Process individual asset types
     def process_video_asset(self, asset: Dict[str, Any]) -> VideoFileClip:
+        # Validate asset parameters
+        if 'parameters' not in asset:
+            raise ValueError(f"Asset missing 'parameters': {asset}")
+        if 'url' not in asset['parameters']:
+            raise ValueError(f"Asset parameters missing 'url': {asset['parameters']}")
+        
+        url = asset['parameters']['url']
+        if url is None:
+            raise ValueError(f"Asset URL is None in asset: {asset}")
+        
         params = {
-            'filename': handle_path(asset['parameters']['url'])
+            'filename': handle_path(url)
         }
         if 'audio' in asset['parameters']:
             params['audio'] = asset['parameters']['audio']

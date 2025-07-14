@@ -90,10 +90,24 @@ class ContentShortEngine(AbstractContentEngine):
         self._db_background_music_url = AssetDatabase.get_asset_link(self._db_background_music_name)
 
     def _chooseBackgroundVideo(self):
-        self._db_background_video_url = AssetDatabase.get_asset_link(
-            self._db_background_video_name)
-        self._db_background_video_duration = AssetDatabase.get_asset_duration(
-            self._db_background_video_name)
+        # Validate background video name
+        if not self._db_background_video_name:
+            raise ValueError("Background video name is None or empty. Please select a background video.")
+        
+        try:
+            self._db_background_video_url = AssetDatabase.get_asset_link(
+                self._db_background_video_name)
+            self._db_background_video_duration = AssetDatabase.get_asset_duration(
+                self._db_background_video_name)
+            
+            # Validate that we got valid URLs and duration
+            if not self._db_background_video_url:
+                raise ValueError(f"Background video URL is None for asset: {self._db_background_video_name}")
+            if not self._db_background_video_duration:
+                raise ValueError(f"Background video duration is None for asset: {self._db_background_video_name}")
+                
+        except Exception as e:
+            raise ValueError(f"Failed to get background video '{self._db_background_video_name}': {e}")
 
     def _prepareBackgroundAssets(self):
         self.verifyParameters(

@@ -95,17 +95,22 @@ class S3Uploader:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             s3_key = f"{s3_folder}{timestamp}_{filename}"
             
-            # Prepare metadata
+            # Prepare metadata (S3 metadata values must be strings)
             upload_metadata = {
                 'upload_date': datetime.now().isoformat(),
-                'content_type': content_type,
-                'language': language,
+                'content_type': str(content_type),
+                'language': str(language),
                 'processor': 'shortgpt_integrated',
                 'file_size': str(os.path.getsize(video_path))
             }
             
             if metadata:
-                upload_metadata.update(metadata)
+                # Convert all metadata values to strings for S3 compatibility
+                for key, value in metadata.items():
+                    if value is not None:
+                        upload_metadata[str(key)] = str(value)
+                    else:
+                        upload_metadata[str(key)] = 'null'
             
             # Determine content type for HTTP headers
             content_mime_type, _ = mimetypes.guess_type(video_path)

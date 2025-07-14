@@ -78,11 +78,25 @@ class CoreEditingEngine:
             video = video.with_duration(audio.duration)
         if force_duration:
             video = video.with_duration(force_duration)
+        # Choose codec based on GPU availability and environment
+        import os
+        import torch
+        
+        # Determine the best codec to use
+        if torch.cuda.is_available() and os.getenv('FFMPEG_GPU', '0') == '1':
+            video_codec = 'h264_nvenc'
+            preset = 'fast'  # GPU preset
+            print("🎮 Using GPU encoding: h264_nvenc")
+        else:
+            video_codec = 'libx264'
+            preset = 'veryfast'  # CPU preset
+            print("💻 Using CPU encoding: libx264")
+        
         if logger:
             my_logger = MoviepyProgressLogger(callBackFunction=logger)
-            video.write_videofile(output_file, threads=threads,codec='libx264', audio_codec='aac', fps=25, preset='veryfast', logger=my_logger)
+            video.write_videofile(output_file, threads=threads, codec=video_codec, audio_codec='aac', fps=25, preset=preset, logger=my_logger)
         else:
-            video.write_videofile(output_file, threads=threads,codec='libx264', audio_codec='aac', fps=25, preset='veryfast')
+            video.write_videofile(output_file, threads=threads, codec=video_codec, audio_codec='aac', fps=25, preset=preset)
         return output_file
     
     def generate_audio(self, schema:Dict[str, Any], output_file, logger=None) -> None:

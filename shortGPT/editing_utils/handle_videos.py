@@ -39,14 +39,26 @@ def extract_random_clip_from_video(video_url, video_duration, clip_duration, out
         raise Exception("Video too short")
     start_time = video_duration*0.15 + random.random()* (0.7*video_duration-clip_duration)
     
+    # Choose codec and preset based on GPU availability
+    import os
+    import torch
+    
+    if torch.cuda.is_available() and os.getenv('FFMPEG_GPU', '0') == '1':
+        video_codec = 'h264_nvenc'
+        preset = 'fast'
+        print("🎮 Video clipping with GPU: h264_nvenc")
+    else:
+        video_codec = 'libx264'
+        preset = 'ultrafast'
+    
     command = [
         'ffmpeg',
         '-loglevel', 'error',
         '-ss', str(start_time),
         '-t', str(clip_duration),
         '-i', video_url,
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
+        '-c:v', video_codec,
+        '-preset', preset,
         output_file
     ]
     

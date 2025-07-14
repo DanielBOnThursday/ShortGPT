@@ -77,6 +77,12 @@ def patch_ffmpeg_commands():
                 
             def __getattr__(self, name):
                 return getattr(self._process, name)
+            
+            def __enter__(self):
+                return self._process.__enter__()
+            
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return self._process.__exit__(exc_type, exc_val, exc_tb)
         
         # Replace subprocess.Popen with our wrapper
         subprocess.Popen = GPUPopen
